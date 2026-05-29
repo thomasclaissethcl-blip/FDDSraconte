@@ -26,7 +26,8 @@
       heartbeatTimer: null,
       heartbeatMs: 120000,
       ttlMs: 20 * 60 * 1000,
-      lastRemote: null
+      lastRemote: null,
+      releasing: false
     }
   };
 
@@ -436,6 +437,10 @@
     return date.toLocaleString('fr-FR');
   }
 
+  function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
   function lockDisplayName(lock) {
     return lock?.editorName || 'un autre chroniqueur';
   }
@@ -564,12 +569,14 @@
   function startLockHeartbeat() {
     stopLockHeartbeat();
     state.lock.heartbeatTimer = setInterval(() => {
+      if (state.lock.releasing) return;
       renewEditorLock().catch((error) => log(`Renouvellement du verrou impossible : ${error.message}`, 'error'));
     }, state.lock.heartbeatMs);
   }
 
   async function acquireEditorLock({ force = false } = {}) {
     initLockIdentity();
+    state.lock.releasing = false;
     const remote = await readEditorLock();
     const remoteLock = remote?.data;
     const activeOtherLock = isLockActive(remoteLock) && !isOwnLock(remoteLock);
@@ -609,8 +616,9 @@
   }
 
   async function renewEditorLock() {
-    if (!state.lock.acquired) return false;
+    if (!state.lock.acquired || state.lock.releasing) return false;
     const remote = await readEditorLock();
+    if (state.lock.releasing) return false;
     const remoteLock = remote?.data;
     if (remoteLock && isLockActive(remoteLock) && !isOwnLock(remoteLock)) {
       state.lock.acquired = false;
@@ -621,7 +629,9 @@
       return false;
     }
     const nextLock = buildLockData(isOwnLock(remoteLock) ? remoteLock : {}, true);
+    if (state.lock.releasing) return false;
     await commitLockData(nextLock, !remote?.refSha);
+    if (state.lock.releasing) return false;
     state.lock.acquired = true;
     state.lock.lastRemote = nextLock;
     renderLockStatus();
@@ -650,20 +660,31 @@
       renderLockStatus();
       return;
     }
+    state.lock.releasing = true;
+    stopLockHeartbeat();
     try {
       const remote = await readEditorLock();
       const remoteLock = remote?.data;
       if (remote?.refSha && (!remoteLock || isOwnLock(remoteLock))) {
         const releasedLock = buildLockData(remoteLock || {}, false);
         await commitLockData(releasedLock, false);
+        await sleep(900);
+        const verification = await readEditorLock();
+        if (verification?.data && isLockActive(verification.data) && isOwnLock(verification.data)) {
+          throw new Error('GitHub indique encore un verrou actif après la demande de libération. Réessayez dans quelques secondes.');
+        }
+      } else if (remoteLock && !isOwnLock(remoteLock)) {
+        throw new Error(`Le verrou distant est détenu par ${lockDisplayName(remoteLock)}. Impossible de le libérer depuis cette session.`);
       }
       state.lock.acquired = false;
       state.lock.lastRemote = null;
-      stopLockHeartbeat();
       renderLockStatus('Verrou éditorial libéré.', false);
-      if (!silent) log('Verrou éditorial libéré.', 'ok');
+      if (!silent) log('Verrou éditorial libéré côté GitHub.', 'ok');
     } catch (error) {
       if (!silent) log(`Impossible de libérer le verrou : ${error.message}`, 'error');
+    } finally {
+      state.lock.releasing = false;
+      if (!state.lock.acquired) stopLockHeartbeat();
     }
   }
 
