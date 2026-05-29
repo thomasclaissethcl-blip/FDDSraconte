@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FDDS Editor</title>
+  <link rel="stylesheet" href="assets/editor.css" />
+  <script defer src="assets/editor.js"></script>
+</head>
+<body>
+  <header class="app-header">
+    <div>
+      <p class="eyebrow">Outil éditorial local</p>
+      <h1>FDDS Editor</h1>
+      <p class="subtitle">Éditer les contenus structurés du site, générer les fichiers publics, puis publier sur GitHub.</p>
+    </div>
+    <div class="status-card" id="status-card">
+      <span class="status-dot" id="status-dot"></span>
+      <span id="status-text">Non connecté</span>
+    </div>
+  </header>
+
+  <main class="app-shell">
+    <section class="panel connection-panel" aria-labelledby="connection-title">
+      <div class="panel-heading">
+        <div>
+          <p class="section-kicker">Connexion</p>
+          <h2 id="connection-title">Dépôt GitHub du site</h2>
+        </div>
+        <button class="secondary" type="button" id="load-saved-config">Recharger la configuration</button>
+      </div>
+
+      <div class="form-grid four">
+        <label>Propriétaire ou organisation GitHub
+          <input id="repo-owner" autocomplete="off" placeholder="ex. thomasclaisse" />
+        </label>
+        <label>Nom du dépôt
+          <input id="repo-name" autocomplete="off" placeholder="ex. flash-dog-site" />
+        </label>
+        <label>Branche
+          <input id="repo-branch" autocomplete="off" value="main" />
+        </label>
+        <label>Préfixe de dossier, si besoin
+          <input id="repo-prefix" autocomplete="off" placeholder="laisser vide si site à la racine" />
+        </label>
+      </div>
+      <label>Token GitHub à permissions limitées
+        <input id="github-token" type="password" autocomplete="off" placeholder="Le token reste dans ce navigateur" />
+      </label>
+      <div class="actions-row">
+        <button type="button" id="save-config">Enregistrer localement</button>
+        <button type="button" id="load-github">Charger le site depuis GitHub</button>
+        <button class="danger" type="button" id="forget-config">Effacer la configuration locale</button>
+      </div>
+      <p class="help-text">L’éditeur lit les fichiers <code>content/</code>, les images et l’arborescence du dépôt. Il n’est pas destiné à être publié dans le site public.</p>
+    </section>
+
+    <section class="workspace" aria-label="Espace d’édition">
+      <nav class="tabs" aria-label="Sections de l’éditeur">
+        <button class="tab is-active" type="button" data-tab="tree">Arborescence</button>
+        <button class="tab" type="button" data-tab="home">Accueil</button>
+        <button class="tab" type="button" data-tab="articles">Articles</button>
+        <button class="tab" type="button" data-tab="categories">Catégories</button>
+        <button class="tab" type="button" data-tab="images">Images</button>
+        <button class="tab" type="button" data-tab="backup">Sauvegarde</button>
+        <button class="tab" type="button" data-tab="publish">Publication</button>
+      </nav>
+
+      <section class="tab-panel is-active" id="tab-tree">
+        <div class="panel-heading">
+          <div>
+            <p class="section-kicker">Lecture</p>
+            <h2>Arborescence du dépôt</h2>
+          </div>
+          <button class="secondary" type="button" id="refresh-tree">Rafraîchir</button>
+        </div>
+        <div class="tree-view" id="tree-view">Chargez le site depuis GitHub pour afficher l’arborescence.</div>
+      </section>
+
+      <section class="tab-panel" id="tab-home">
+        <div class="panel-heading">
+          <div>
+            <p class="section-kicker">Contenu</p>
+            <h2>Page d’accueil</h2>
+          </div>
+        </div>
+        <div class="form-grid two">
+          <label>Titre des catégories
+            <input id="home-categories-title" />
+          </label>
+          <label>Titre des articles
+            <input id="home-articles-title" />
+          </label>
+          <label>Texte d’introduction des catégories
+            <input id="home-categories-intro" />
+          </label>
+          <label>Libellé de recherche
+            <input id="home-search-label" />
+          </label>
+          <label>Placeholder de recherche
+            <input id="home-search-placeholder" />
+          </label>
+          <label>Bouton de réinitialisation
+            <input id="home-reset-label" />
+          </label>
+        </div>
+        <label>Bloc de présentation HTML
+          <textarea id="home-intro-html" class="code-area" rows="18"></textarea>
+        </label>
+        <div class="preview-box" id="home-preview"></div>
+      </section>
+
+      <section class="tab-panel" id="tab-articles">
+        <div class="editor-layout">
+          <aside class="list-panel">
+            <div class="list-toolbar">
+              <h2>Articles</h2>
+              <button type="button" id="new-article">Créer</button>
+            </div>
+            <input class="list-search" id="article-list-search" placeholder="Filtrer la liste" />
+            <div class="item-list" id="article-list"></div>
+          </aside>
+          <section class="edit-panel" aria-labelledby="article-form-title">
+            <h2 id="article-form-title">Article sélectionné</h2>
+            <div class="form-grid two">
+              <label>Titre
+                <input id="article-title" />
+              </label>
+              <label>Slug
+                <input id="article-slug" />
+              </label>
+              <label>Image principale
+                <input id="article-image" placeholder="assets/images/..." />
+              </label>
+              <label>Résumé de carte
+                <input id="article-summary" />
+              </label>
+            </div>
+            <fieldset class="checkbox-group">
+              <legend>Catégories</legend>
+              <div id="article-categories"></div>
+            </fieldset>
+            <label>Corps HTML de l’article
+              <textarea id="article-body" class="code-area" rows="20"></textarea>
+            </label>
+            <div class="actions-row">
+              <button type="button" id="save-article-local">Enregistrer en mémoire</button>
+              <button class="danger" type="button" id="delete-article-local">Supprimer en mémoire</button>
+            </div>
+            <div class="preview-box article-preview" id="article-preview"></div>
+          </section>
+        </div>
+      </section>
+
+      <section class="tab-panel" id="tab-categories">
+        <div class="editor-layout">
+          <aside class="list-panel">
+            <div class="list-toolbar">
+              <h2>Catégories</h2>
+              <button type="button" id="new-category">Créer</button>
+            </div>
+            <div class="item-list" id="category-list"></div>
+          </aside>
+          <section class="edit-panel">
+            <h2>Catégorie sélectionnée</h2>
+            <div class="form-grid two">
+              <label>Nom affiché
+                <input id="category-label" />
+              </label>
+              <label>Slug
+                <input id="category-slug" />
+              </label>
+              <label>Image
+                <input id="category-image" placeholder="assets/images/..." />
+              </label>
+            </div>
+            <label>Description
+              <textarea id="category-description" rows="6"></textarea>
+            </label>
+            <div class="actions-row">
+              <button type="button" id="save-category-local">Enregistrer en mémoire</button>
+              <button class="danger" type="button" id="delete-category-local">Supprimer en mémoire</button>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="tab-panel" id="tab-images">
+        <div class="panel-heading">
+          <div>
+            <p class="section-kicker">Médias</p>
+            <h2>Images</h2>
+          </div>
+        </div>
+        <div class="upload-box">
+          <label>Ajouter une image à publier dans <code>assets/images/</code>
+            <input type="file" id="image-file" accept="image/*" />
+          </label>
+          <label>Nom de fichier cible
+            <input id="image-target-name" placeholder="ex. nouvelle-image.webp" />
+          </label>
+          <button type="button" id="queue-image">Ajouter à la file de publication</button>
+        </div>
+        <h3>Images déjà repérées</h3>
+        <div class="image-grid" id="image-grid"></div>
+        <h3>Images en attente de publication</h3>
+        <div class="pending-list" id="pending-images"></div>
+      </section>
+
+      <section class="tab-panel" id="tab-backup">
+        <div class="panel-heading">
+          <div>
+            <p class="section-kicker">Sécurité</p>
+            <h2>Sauvegarde éditoriale</h2>
+          </div>
+        </div>
+        <p>Cette sauvegarde contient les contenus éditoriaux gérés par l’éditeur : accueil, articles, catégories et index des images. Elle ne remplace pas encore un ZIP complet du dépôt.</p>
+        <div class="actions-row">
+          <button type="button" id="download-backup">Télécharger un backup JSON</button>
+          <label class="button-like secondary">Restaurer un backup JSON
+            <input type="file" id="restore-backup" accept="application/json" hidden />
+          </label>
+        </div>
+      </section>
+
+      <section class="tab-panel" id="tab-publish">
+        <div class="panel-heading">
+          <div>
+            <p class="section-kicker">Publication</p>
+            <h2>Génération et envoi sur GitHub</h2>
+          </div>
+        </div>
+        <p>La publication écrit les fichiers <code>content/</code>, régénère <code>index.html</code>, <code>pages/*.html</code>, <code>data/articles.json</code>, <code>data/categories.json</code> et <code>data/search-index.json</code>, puis envoie les fichiers modifiés sur GitHub.</p>
+        <div class="actions-row">
+          <button type="button" id="preview-build">Prévisualiser la génération</button>
+          <button type="button" id="publish-github">Publier sur GitHub</button>
+        </div>
+        <div class="build-preview" id="build-preview"></div>
+      </section>
+    </section>
+
+    <section class="log-panel" aria-labelledby="log-title">
+      <div class="panel-heading compact">
+        <h2 id="log-title">Journal</h2>
+        <button class="secondary" type="button" id="clear-log">Effacer</button>
+      </div>
+      <pre id="log-output"></pre>
+    </section>
+  </main>
+</body>
+</html>
