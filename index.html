@@ -3,8 +3,9 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>FDDS Editor</title>
+  <title>FDDS Editor v0.3</title>
   <link rel="stylesheet" href="assets/editor.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <script defer src="assets/editor.js"></script>
 </head>
 <body>
@@ -12,7 +13,7 @@
     <div>
       <p class="eyebrow">Outil éditorial local</p>
       <h1>FDDS Editor</h1>
-      <p class="subtitle">Éditer les contenus structurés du site, générer les fichiers publics, puis publier sur GitHub.</p>
+      <p class="subtitle">Éditer les contenus structurés du site, générer les fichiers publics, sauvegarder le dépôt, puis publier sur GitHub.</p>
     </div>
     <div class="status-card" id="status-card">
       <span class="status-dot" id="status-dot"></span>
@@ -104,9 +105,30 @@
             <input id="home-reset-label" />
           </label>
         </div>
-        <label>Bloc de présentation HTML
-          <textarea id="home-intro-html" class="code-area" rows="18"></textarea>
-        </label>
+        <div class="rich-editor-block" data-rich-target="home-intro-html" data-rich-editor="home-rich-editor">
+          <div class="rich-editor-label">Bloc de présentation</div>
+          <div class="rich-toolbar" aria-label="Outils de mise en forme">
+            <select class="rich-format" aria-label="Format de paragraphe">
+              <option value="P">Paragraphe</option>
+              <option value="H2">Titre 2</option>
+              <option value="H3">Titre 3</option>
+              <option value="BLOCKQUOTE">Citation</option>
+            </select>
+            <button type="button" class="secondary" data-rich-command="bold">Gras</button>
+            <button type="button" class="secondary" data-rich-command="italic">Italique</button>
+            <button type="button" class="secondary" data-rich-command="insertUnorderedList">Liste</button>
+            <button type="button" class="secondary" data-rich-command="insertOrderedList">Liste numérotée</button>
+            <button type="button" class="secondary" data-rich-action="link">Lien</button>
+            <select class="rich-image-select" aria-label="Image à insérer"></select>
+            <button type="button" class="secondary" data-rich-action="image">Insérer l’image</button>
+            <button type="button" class="secondary" data-rich-command="removeFormat">Nettoyer</button>
+          </div>
+          <div id="home-rich-editor" class="rich-editor" contenteditable="true" role="textbox" aria-multiline="true"></div>
+        </div>
+        <details class="source-details">
+          <summary>Afficher le HTML source de la présentation</summary>
+          <textarea id="home-intro-html" class="code-area" rows="14"></textarea>
+        </details>
         <div class="preview-box" id="home-preview"></div>
       </section>
 
@@ -132,6 +154,9 @@
               <label>Image principale
                 <input id="article-image" placeholder="assets/images/..." />
               </label>
+              <label>Choisir une image existante
+                <select id="article-image-select"></select>
+              </label>
               <label>Résumé de carte
                 <input id="article-summary" />
               </label>
@@ -140,9 +165,30 @@
               <legend>Catégories</legend>
               <div id="article-categories"></div>
             </fieldset>
-            <label>Corps HTML de l’article
-              <textarea id="article-body" class="code-area" rows="20"></textarea>
-            </label>
+            <div class="rich-editor-block" data-rich-target="article-body" data-rich-editor="article-rich-editor">
+              <div class="rich-editor-label">Corps de l’article</div>
+              <div class="rich-toolbar" aria-label="Outils de mise en forme">
+                <select class="rich-format" aria-label="Format de paragraphe">
+                  <option value="P">Paragraphe</option>
+                  <option value="H2">Titre 2</option>
+                  <option value="H3">Titre 3</option>
+                  <option value="BLOCKQUOTE">Citation</option>
+                </select>
+                <button type="button" class="secondary" data-rich-command="bold">Gras</button>
+                <button type="button" class="secondary" data-rich-command="italic">Italique</button>
+                <button type="button" class="secondary" data-rich-command="insertUnorderedList">Liste</button>
+                <button type="button" class="secondary" data-rich-command="insertOrderedList">Liste numérotée</button>
+                <button type="button" class="secondary" data-rich-action="link">Lien</button>
+                <select class="rich-image-select" aria-label="Image à insérer"></select>
+                <button type="button" class="secondary" data-rich-action="image">Insérer l’image</button>
+                <button type="button" class="secondary" data-rich-command="removeFormat">Nettoyer</button>
+              </div>
+              <div id="article-rich-editor" class="rich-editor" contenteditable="true" role="textbox" aria-multiline="true"></div>
+            </div>
+            <details class="source-details">
+              <summary>Afficher le HTML source de l’article</summary>
+              <textarea id="article-body" class="code-area" rows="16"></textarea>
+            </details>
             <div class="actions-row">
               <button type="button" id="save-article-local">Enregistrer en mémoire</button>
               <button class="danger" type="button" id="delete-article-local">Supprimer en mémoire</button>
@@ -172,6 +218,9 @@
               </label>
               <label>Image
                 <input id="category-image" placeholder="assets/images/..." />
+              </label>
+              <label>Choisir une image existante
+                <select id="category-image-select"></select>
               </label>
             </div>
             <label>Description
@@ -214,13 +263,18 @@
             <h2>Sauvegarde éditoriale</h2>
           </div>
         </div>
-        <p>Cette sauvegarde contient les contenus éditoriaux gérés par l’éditeur : accueil, articles, catégories et index des images. Elle ne remplace pas encore un ZIP complet du dépôt.</p>
+        <p>Le backup JSON couvre les contenus éditoriaux. Le backup ZIP couvre tous les fichiers du dépôt visibles dans la branche chargée.</p>
         <div class="actions-row">
           <button type="button" id="download-backup">Télécharger un backup JSON</button>
           <label class="button-like secondary">Restaurer un backup JSON
             <input type="file" id="restore-backup" accept="application/json" hidden />
           </label>
+          <button type="button" id="download-repo-zip">Télécharger un backup ZIP complet</button>
+          <label class="button-like secondary">Restaurer un backup ZIP complet
+            <input type="file" id="restore-repo-zip" accept=".zip,application/zip" hidden />
+          </label>
         </div>
+        <p class="help-text">La restauration ZIP remplace l’état du dépôt par le contenu de l’archive. À utiliser après avoir vérifié que l’archive correspond bien au site cible.</p>
       </section>
 
       <section class="tab-panel" id="tab-publish">

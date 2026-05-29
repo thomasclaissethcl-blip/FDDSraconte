@@ -38,20 +38,24 @@
     homeSearchPlaceholder: $('#home-search-placeholder'),
     homeResetLabel: $('#home-reset-label'),
     homeIntroHtml: $('#home-intro-html'),
+    homeRichEditor: $('#home-rich-editor'),
     homePreview: $('#home-preview'),
     articleList: $('#article-list'),
     articleListSearch: $('#article-list-search'),
     articleTitle: $('#article-title'),
     articleSlug: $('#article-slug'),
     articleImage: $('#article-image'),
+    articleImageSelect: $('#article-image-select'),
     articleSummary: $('#article-summary'),
     articleCategories: $('#article-categories'),
     articleBody: $('#article-body'),
+    articleRichEditor: $('#article-rich-editor'),
     articlePreview: $('#article-preview'),
     categoryList: $('#category-list'),
     categoryLabel: $('#category-label'),
     categorySlug: $('#category-slug'),
     categoryImage: $('#category-image'),
+    categoryImageSelect: $('#category-image-select'),
     categoryDescription: $('#category-description'),
     imageGrid: $('#image-grid'),
     imageFile: $('#image-file'),
@@ -125,6 +129,41 @@
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#039;');
+  }
+
+
+  function isLikelyBinaryPath(path) {
+    return /\.(png|jpe?g|gif|webp|avif|ico|svgz|pdf|zip|woff2?|ttf|otf|mp3|mp4|webm|ogg)$/i.test(String(path || ''));
+  }
+
+  function arrayBufferToBase64(buffer) {
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    const chunkSize = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+    }
+    return btoa(binary);
+  }
+
+  function syncRichToTextarea(editor, textarea) {
+    if (!editor || !textarea) return;
+    textarea.value = editor.innerHTML.trim();
+  }
+
+  function syncTextareaToRich(textarea, editor) {
+    if (!editor || !textarea) return;
+    if (editor.innerHTML !== textarea.value) editor.innerHTML = textarea.value || '';
+  }
+
+  function setRichHTML(textarea, editor, html) {
+    if (textarea) textarea.value = html || '';
+    if (editor) editor.innerHTML = html || '';
+  }
+
+  function syncAllRichEditors() {
+    syncRichToTextarea(els.homeRichEditor, els.homeIntroHtml);
+    syncRichToTextarea(els.articleRichEditor, els.articleBody);
   }
 
   function interpolate(template, values) {
@@ -273,6 +312,10 @@
 
   async function getGitCommit(commitSha) {
     return githubFetch(`/git/commits/${encodeURIComponent(commitSha)}`);
+  }
+
+  async function getGitBlob(blobSha) {
+    return githubFetch(`/git/blobs/${encodeURIComponent(blobSha)}`);
   }
 
   async function createGitBlob(base64Content) {
@@ -455,6 +498,7 @@
     renderCategoryList();
     renderCategoryForm();
     renderImages();
+    renderImageSelectors();
     renderPendingImages();
   }
 
@@ -466,11 +510,12 @@
     els.homeSearchLabel.value = state.home.searchLabel || '';
     els.homeSearchPlaceholder.value = state.home.searchPlaceholder || '';
     els.homeResetLabel.value = state.home.resetLabel || '';
-    els.homeIntroHtml.value = state.home.introHtml || '';
+    setRichHTML(els.homeIntroHtml, els.homeRichEditor, state.home.introHtml || '');
     els.homePreview.innerHTML = state.home.introHtml || '';
   }
 
   function collectHomeFromForm() {
+    syncRichToTextarea(els.homeRichEditor, els.homeIntroHtml);
     if (!state.home) state.home = {};
     state.home.categoriesTitle = els.homeCategoriesTitle.value;
     state.home.articlesTitle = els.homeArticlesTitle.value;
@@ -523,8 +568,9 @@
       els.articleTitle.value = '';
       els.articleSlug.value = '';
       els.articleImage.value = '';
+      if (els.articleImageSelect) els.articleImageSelect.value = '';
       els.articleSummary.value = '';
-      els.articleBody.value = '';
+      setRichHTML(els.articleBody, els.articleRichEditor, '');
       els.articleCategories.innerHTML = '';
       els.articlePreview.innerHTML = '';
       return;
@@ -532,8 +578,9 @@
     els.articleTitle.value = article.title || '';
     els.articleSlug.value = article.slug || '';
     els.articleImage.value = article.image || '';
+    if (els.articleImageSelect) els.articleImageSelect.value = article.image || '';
     els.articleSummary.value = article.summary || '';
-    els.articleBody.value = article.bodyHtml || '';
+    setRichHTML(els.articleBody, els.articleRichEditor, article.bodyHtml || '');
     renderCategoryCheckboxes(article);
     renderArticlePreview();
   }
@@ -545,6 +592,7 @@
   }
 
   function saveArticleFromForm(withLog = true) {
+    syncRichToTextarea(els.articleRichEditor, els.articleBody);
     const oldSlug = state.selectedArticleSlug;
     if (!oldSlug) return;
     const article = getSelectedArticle();
@@ -601,6 +649,7 @@
   function renderArticlePreview() {
     const article = getSelectedArticle();
     if (!article) return;
+    syncRichToTextarea(els.articleRichEditor, els.articleBody);
     els.articlePreview.innerHTML = `<article class="article"><header><h1>${escapeHTML(els.articleTitle.value)}</h1></header><div>${els.articleBody.value}</div></article>`;
   }
 
@@ -631,12 +680,14 @@
       els.categoryLabel.value = '';
       els.categorySlug.value = '';
       els.categoryImage.value = '';
+      if (els.categoryImageSelect) els.categoryImageSelect.value = '';
       els.categoryDescription.value = '';
       return;
     }
     els.categoryLabel.value = category.label || '';
     els.categorySlug.value = category.slug || '';
     els.categoryImage.value = category.image || '';
+    if (els.categoryImageSelect) els.categoryImageSelect.value = category.image || '';
     els.categoryDescription.value = category.description || '';
   }
 
@@ -704,6 +755,27 @@
     });
   }
 
+
+  function imagePaths() {
+    return state.images
+      .map((image) => image.path || image.src || image.image || image)
+      .filter(Boolean)
+      .sort((a, b) => String(a).localeCompare(String(b), 'fr-FR'));
+  }
+
+  function populateImageSelect(select, currentValue = '') {
+    if (!select) return;
+    const paths = imagePaths();
+    select.innerHTML = '<option value="">Aucune image sélectionnée</option>' + paths.map((path) => `<option value="${escapeHTML(path)}">${escapeHTML(path)}</option>`).join('');
+    select.value = currentValue || '';
+  }
+
+  function renderImageSelectors() {
+    populateImageSelect(els.articleImageSelect, els.articleImage?.value || '');
+    populateImageSelect(els.categoryImageSelect, els.categoryImage?.value || '');
+    $$('.rich-image-select').forEach((select) => populateImageSelect(select, ''));
+  }
+
   function renderPendingImages() {
     els.pendingImages.innerHTML = '';
     if (!state.pendingImages.length) {
@@ -749,6 +821,7 @@
     els.imageFile.value = '';
     els.imageTargetName.value = '';
     renderImages();
+    renderImageSelectors();
     renderPendingImages();
     log(`Image ajoutée à la file : ${path}.`, 'ok');
   }
@@ -839,21 +912,29 @@
   };
 
   function buildSiteFiles() {
+    syncAllRichEditors();
     collectHomeFromForm();
     saveArticleFromForm(false);
     saveCategoryFromForm(false);
 
     const site = state.site || { title: 'Site', language: 'fr', brand: {} };
     const articles = sortByTitle(state.articles.map(normalizeArticle));
-    const declaredCategories = state.categories;
-    const usedCategoryLabels = new Set();
-    articles.forEach((article) => article.categories.forEach((label) => usedCategoryLabels.add(label)));
-    const declaredBySlug = new Map(declaredCategories.map((category) => [category.slug || slugify(category.label), category]));
-    const categories = sortCategories([...usedCategoryLabels].map((label) => {
-      const slug = slugify(label);
-      const declared = declaredBySlug.get(slug) || {};
-      return { slug, label, description: declared.description || '', image: declared.image || '' };
-    }));
+    const declaredCategories = sortCategories(state.categories.map((category) => ({
+      slug: category.slug || slugify(category.label),
+      label: category.label || 'Catégorie sans nom',
+      description: category.description || '',
+      image: category.image || ''
+    })));
+    const categoriesBySlug = new Map(declaredCategories.map((category) => [category.slug, category]));
+    articles.forEach((article) => {
+      article.categories.forEach((label) => {
+        const slug = slugify(label);
+        if (!categoriesBySlug.has(slug)) {
+          categoriesBySlug.set(slug, { slug, label, description: '', image: '' });
+        }
+      });
+    });
+    const categories = sortCategories([...categoriesBySlug.values()]);
 
     const files = new Map();
     files.set('content/site.json', `${JSON.stringify(site, null, 2)}\n`);
@@ -973,7 +1054,110 @@
     }
   }
 
+
+  async function ensureZipLibrary() {
+    if (!window.JSZip) {
+      throw new Error('La bibliothèque ZIP n’est pas chargée. Vérifiez votre connexion internet ou rechargez l’éditeur.');
+    }
+    return window.JSZip;
+  }
+
+  async function downloadRepositoryZip() {
+    if (!state.loaded) {
+      log('Chargez d’abord le site.', 'error');
+      return;
+    }
+    try {
+      const JSZip = await ensureZipLibrary();
+      assertConfig();
+      await loadTree();
+      const zip = new JSZip();
+      const blobs = state.tree.filter((item) => item.type === 'blob');
+      log(`Préparation du backup ZIP : ${blobs.length} fichiers.`);
+      for (const item of blobs) {
+        log(`Ajout au ZIP : ${item.displayPath}`);
+        const blob = await getGitBlob(item.sha);
+        const content = String(blob.content || '').replace(/\n/g, '');
+        if (blob.encoding === 'base64') {
+          zip.file(item.displayPath, content, { base64: true });
+        }
+      }
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `fdds-backup-complet-${new Date().toISOString().slice(0, 10)}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+      log('Backup ZIP complet généré.', 'ok');
+    } catch (error) {
+      log(error.message, 'error');
+    }
+  }
+
+  function findCommonZipRoot(paths) {
+    const firstSegments = paths
+      .filter((path) => path.includes('/'))
+      .map((path) => path.split('/')[0]);
+    if (!firstSegments.length) return '';
+    const candidate = firstSegments[0];
+    return firstSegments.every((segment) => segment === candidate) && !paths.includes('index.html') ? `${candidate}/` : '';
+  }
+
+  async function restoreRepositoryZip(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    if (!state.loaded && !confirm('Le site n’est pas chargé. Continuer quand même après lecture de l’arborescence GitHub ?')) return;
+    if (!confirm('Restaurer ce ZIP vers GitHub ? Cette opération remplacera les fichiers du dépôt de test par le contenu de l’archive.')) return;
+    try {
+      const JSZip = await ensureZipLibrary();
+      assertConfig();
+      await loadTree();
+      const zip = await JSZip.loadAsync(file);
+      const rawPaths = Object.keys(zip.files).filter((path) => !zip.files[path].dir && !path.includes('__MACOSX/'));
+      const root = findCommonZipRoot(rawPaths);
+      const files = new Map();
+      const images = [];
+      const nextPaths = new Set();
+
+      for (const rawPath of rawPaths) {
+        const normalizedPath = root ? rawPath.replace(root, '') : rawPath;
+        if (!normalizedPath || normalizedPath.endsWith('/')) continue;
+        nextPaths.add(normalizedPath);
+        const zipEntry = zip.files[rawPath];
+        if (isLikelyBinaryPath(normalizedPath)) {
+          const base64 = await zipEntry.async('base64');
+          images.push({ path: normalizedPath, base64 });
+        } else {
+          const text = await zipEntry.async('text');
+          files.set(normalizedPath, text);
+        }
+      }
+
+      const deletedPaths = new Set(
+        state.tree
+          .filter((item) => item.type === 'blob')
+          .map((item) => item.displayPath)
+          .filter((path) => !nextPaths.has(path))
+      );
+
+      await commitFilesInOneBatch({
+        files,
+        images,
+        deletedPaths,
+        message: `Restauration ZIP FDDS Editor — ${new Date().toISOString()}`
+      });
+      await loadSiteFromGithub();
+      log('Restauration ZIP publiée sur GitHub.', 'ok');
+    } catch (error) {
+      log(error.message, 'error');
+    } finally {
+      event.target.value = '';
+    }
+  }
+
   function downloadBackup() {
+    syncAllRichEditors();
     collectHomeFromForm();
     saveArticleFromForm(false);
     saveCategoryFromForm(false);
@@ -1018,6 +1202,84 @@
     log('Backup JSON restauré en mémoire. Publiez ensuite pour l’envoyer sur GitHub.', 'ok');
   }
 
+
+  function getEditorFromBlock(block) {
+    return block ? block.querySelector('.rich-editor') : null;
+  }
+
+  function applyRichCommand(button) {
+    const block = button.closest('.rich-editor-block');
+    const editor = getEditorFromBlock(block);
+    if (!editor) return;
+    editor.focus();
+    document.execCommand(button.dataset.richCommand, false, null);
+    syncRichToTextarea(editor, document.getElementById(block.dataset.richTarget));
+    if (block.dataset.richTarget === 'article-body') renderArticlePreview();
+    if (block.dataset.richTarget === 'home-intro-html') collectHomeFromForm();
+  }
+
+  function applyRichFormat(select) {
+    const block = select.closest('.rich-editor-block');
+    const editor = getEditorFromBlock(block);
+    if (!editor) return;
+    editor.focus();
+    document.execCommand('formatBlock', false, select.value);
+    syncRichToTextarea(editor, document.getElementById(block.dataset.richTarget));
+  }
+
+  function insertRichLink(button) {
+    const block = button.closest('.rich-editor-block');
+    const editor = getEditorFromBlock(block);
+    if (!editor) return;
+    const url = prompt('Adresse du lien à insérer :');
+    if (!url) return;
+    editor.focus();
+    document.execCommand('createLink', false, url);
+    syncRichToTextarea(editor, document.getElementById(block.dataset.richTarget));
+  }
+
+  function insertRichImage(button) {
+    const block = button.closest('.rich-editor-block');
+    const editor = getEditorFromBlock(block);
+    const select = block?.querySelector('.rich-image-select');
+    const path = select?.value;
+    if (!editor || !path) {
+      log('Choisissez une image avant de l’insérer.', 'error');
+      return;
+    }
+    const alt = prompt('Texte alternatif de l’image, facultatif :') || '';
+    editor.focus();
+    document.execCommand('insertHTML', false, `<figure><img src="${escapeHTML(path)}" alt="${escapeHTML(alt)}"><figcaption>${escapeHTML(alt)}</figcaption></figure>`);
+    syncRichToTextarea(editor, document.getElementById(block.dataset.richTarget));
+    if (block.dataset.richTarget === 'article-body') renderArticlePreview();
+    if (block.dataset.richTarget === 'home-intro-html') collectHomeFromForm();
+  }
+
+  function setupRichEditors() {
+    $$('.rich-editor').forEach((editor) => {
+      editor.addEventListener('input', () => {
+        const block = editor.closest('.rich-editor-block');
+        const target = document.getElementById(block.dataset.richTarget);
+        syncRichToTextarea(editor, target);
+        if (block.dataset.richTarget === 'article-body') renderArticlePreview();
+        if (block.dataset.richTarget === 'home-intro-html') collectHomeFromForm();
+      });
+    });
+    $$('.rich-editor-block').forEach((block) => {
+      const textarea = document.getElementById(block.dataset.richTarget);
+      const editor = getEditorFromBlock(block);
+      textarea?.addEventListener('input', () => {
+        syncTextareaToRich(textarea, editor);
+        if (textarea.id === 'article-body') renderArticlePreview();
+        if (textarea.id === 'home-intro-html') collectHomeFromForm();
+      });
+    });
+    $$('.rich-toolbar [data-rich-command]').forEach((button) => button.addEventListener('click', () => applyRichCommand(button)));
+    $$('.rich-toolbar [data-rich-action="link"]').forEach((button) => button.addEventListener('click', () => insertRichLink(button)));
+    $$('.rich-toolbar [data-rich-action="image"]').forEach((button) => button.addEventListener('click', () => insertRichImage(button)));
+    $$('.rich-format').forEach((select) => select.addEventListener('change', () => applyRichFormat(select)));
+  }
+
   function switchTab(tabName) {
     $$('.tab').forEach((button) => button.classList.toggle('is-active', button.dataset.tab === tabName));
     $$('.tab-panel').forEach((panel) => panel.classList.toggle('is-active', panel.id === `tab-${tabName}`));
@@ -1048,12 +1310,17 @@
     $('#save-category-local').addEventListener('click', () => saveCategoryFromForm(true));
     $('#delete-category-local').addEventListener('click', deleteCategory);
     $('#queue-image').addEventListener('click', queueImage);
+    els.articleImageSelect?.addEventListener('change', () => { els.articleImage.value = els.articleImageSelect.value; saveArticleFromForm(false); });
+    els.categoryImageSelect?.addEventListener('change', () => { els.categoryImage.value = els.categoryImageSelect.value; saveCategoryFromForm(false); });
     $('#download-backup').addEventListener('click', downloadBackup);
     $('#restore-backup').addEventListener('change', restoreBackup);
+    $('#download-repo-zip').addEventListener('click', downloadRepositoryZip);
+    $('#restore-repo-zip').addEventListener('change', restoreRepositoryZip);
     $('#preview-build').addEventListener('click', previewBuild);
     $('#publish-github').addEventListener('click', publishGithub);
   }
 
+  setupRichEditors();
   bindEvents();
   loadSavedConfig();
 })();
