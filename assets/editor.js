@@ -2186,40 +2186,6 @@ ${article.bodyHtml || ''}`.trim();
     return element.closest('label') || element.closest('fieldset') || element;
   }
 
-  function placeCharacterHelpButton(host, button, item) {
-    const control = host.querySelector('input, select, textarea, .rich-mini, .rich-editor');
-    const row = document.createElement('span');
-    row.className = 'context-help-label-row';
-
-    const labelText = document.createElement('span');
-    labelText.className = 'context-help-label-text';
-
-    if (control) {
-      const nodesBeforeControl = [];
-      for (const node of Array.from(host.childNodes)) {
-        if (node === control) break;
-        if (node === button) continue;
-        nodesBeforeControl.push(node);
-      }
-
-      const text = nodesBeforeControl
-        .map((node) => node.textContent || '')
-        .join(' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-
-      nodesBeforeControl.forEach((node) => node.remove());
-      labelText.textContent = text || item.title;
-      row.append(labelText, button);
-      host.insertBefore(row, control);
-      return;
-    }
-
-    labelText.textContent = item.title;
-    row.append(labelText, button);
-    host.appendChild(row);
-  }
-
   function addHelpButton(host, item) {
     if (!host || host.dataset.helpReady === 'true') return;
     host.dataset.helpReady = 'true';
@@ -2249,7 +2215,27 @@ ${article.bodyHtml || ''}`.trim();
     }
 
     if (isCharacterFieldLabel) {
-      placeCharacterHelpButton(host, button, item);
+      const control = host.querySelector('input, select, textarea, .rich-mini, .rich-editor');
+      if (control) {
+        const labelRow = document.createElement('span');
+        labelRow.className = 'context-help-label-row';
+
+        const labelText = document.createElement('span');
+        labelText.className = 'context-help-label-text';
+
+        while (host.firstChild && host.firstChild !== control) {
+          labelText.appendChild(host.firstChild);
+        }
+
+        const normalizedText = labelText.textContent.replace(/\s+/g, ' ').trim();
+        labelText.textContent = normalizedText;
+
+        labelRow.appendChild(labelText);
+        labelRow.appendChild(button);
+        host.insertBefore(labelRow, control);
+      } else {
+        host.appendChild(button);
+      }
       return;
     }
 
