@@ -667,3 +667,19 @@ fieldset.has-context-help,
     padding: 1rem;
   }
 }
+
+/* Aperçu public exact */
+.production-preview-frame {
+  display: block;
+  width: 100%;
+  min-height: 520px;
+  border: 0;
+  border-radius: 16px;
+  background: #070b16;
+}
+.preview-box:has(.production-preview-frame) {
+  padding: 0;
+  overflow: hidden;
+  background: #070b16;
+  border-style: solid;
+}

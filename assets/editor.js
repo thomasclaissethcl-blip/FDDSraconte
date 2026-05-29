@@ -15,6 +15,7 @@
     selectedArticleSlug: null,
     selectedCategorySlug: null,
     pendingImages: [],
+    siteCss: '',
     loaded: false
   };
 
@@ -378,6 +379,109 @@
     return JSON.parse(await getTextFile(path));
   }
 
+  function getRepoRawBasePath() {
+    const prefix = normalizePrefix(state.config.prefix);
+    const branch = encodeURIComponent(state.config.branch || 'main');
+    const parts = [
+      'https://raw.githubusercontent.com',
+      encodeURIComponent(state.config.owner || ''),
+      encodeURIComponent(state.config.repo || ''),
+      branch
+    ];
+    if (prefix) parts.push(prefix.split('/').map(encodeURIComponent).join('/'));
+    return `${parts.join('/')}/`;
+  }
+
+  function getPreviewCss() {
+    return state.siteCss || `
+      body { margin: 0; font-family: system-ui, sans-serif; color: #f2f6ff; background: #09101e; }
+      .site-main { max-width: 74rem; margin: 0 auto; padding: 2rem; }
+      .article { line-height: 1.65; }
+      img { max-width: 100%; height: auto; }
+      .infobox { float: right; width: min(320px, 100%); margin: .2rem 0 1rem 1.2rem; border: 1px solid rgba(255,255,255,.18); border-radius: 16px; overflow: hidden; }
+      .infobox-title { margin: 0; padding: .85rem 1rem; }
+      .infobox-image { margin: 0; }
+      .infobox-image img { width: 100%; display: block; }
+      .infobox-row { display: grid; grid-template-columns: 42% 1fr; gap: .5rem; padding: .65rem .8rem; border-top: 1px solid rgba(255,255,255,.18); }
+      .infobox-label { margin: 0; opacity: .72; font-size: .86rem; }
+    `;
+  }
+
+  function renderProductionPreview(container, documentHtml) {
+    if (!container) return;
+    container.innerHTML = '';
+    const frame = document.createElement('iframe');
+    frame.className = 'production-preview-frame';
+    frame.setAttribute('title', 'Aperçu du rendu public');
+    frame.setAttribute('sandbox', 'allow-same-origin allow-popups allow-popups-to-escape-sandbox');
+    frame.srcdoc = documentHtml;
+    frame.addEventListener('load', () => {
+      try {
+        const doc = frame.contentDocument;
+        const height = Math.max(520, Math.min(1400, doc.documentElement.scrollHeight + 24));
+        frame.style.height = `${height}px`;
+      } catch (_) {
+        frame.style.height = '760px';
+      }
+    });
+    container.appendChild(frame);
+  }
+
+  function buildArticlePreviewDocument(article) {
+    const site = state.site || { title: 'FDDS', language: 'fr' };
+    const rawBase = getRepoRawBasePath();
+    const safeSlug = article.slug || slugify(article.title || 'article');
+    const categories = Array.isArray(article.categories) ? article.categories.join(', ') : '';
+    return `<!DOCTYPE html>
+<html lang="${escapeHTML(site.language || 'fr')}">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>${escapeHTML(article.title || 'Article')} — ${escapeHTML(site.title || 'FDDS')}</title>
+<base href="${escapeHTML(rawBase)}pages/${escapeHTML(safeSlug)}.html">
+<style>${getPreviewCss()}</style>
+</head>
+<body class="article-document">
+<main class="site-main article-standalone" id="contenu" tabindex="-1">
+<article class="article">
+<header class="article-header">
+<h1>${escapeHTML(article.title || '')}</h1>
+<div class="article-meta">Catégories : ${escapeHTML(categories)}</div>
+</header>
+<div class="article-body">
+${buildArticleBodyHtml(article)}
+</div>
+</article>
+</main>
+</body>
+</html>`;
+  }
+
+  function buildHomeIntroPreviewDocument() {
+    const site = state.site || { title: 'FDDS', language: 'fr' };
+    const rawBase = getRepoRawBasePath();
+    const home = state.home || {};
+    return `<!DOCTYPE html>
+<html lang="${escapeHTML(site.language || 'fr')}">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>${escapeHTML(site.title || 'FDDS')} — aperçu accueil</title>
+<base href="${escapeHTML(rawBase)}index.html">
+<style>${getPreviewCss()}</style>
+</head>
+<body>
+<main class="site-main" data-view="home" id="contenu" tabindex="-1">
+<section class="home-intro" id="home-intro">
+<div class="home-intro-content" id="home-intro-content">
+${home.introHtml || ''}
+</div>
+</section>
+</main>
+</body>
+</html>`;
+  }
+
   async function putFile(path, content, message, isBase64 = false) {
     const fullPath = repoPath(path);
     const payload = {
@@ -543,6 +647,13 @@
       state.site = await getJSON('content/site.json');
       state.home = await getJSON('content/home.json');
       state.categories = await getJSON('content/categories.json');
+      try {
+        state.siteCss = await getTextFile('assets/css/styles.css');
+        log('Feuille de style publique chargée pour les aperçus.', 'ok');
+      } catch (_) {
+        state.siteCss = '';
+        log('Feuille de style publique introuvable. Les aperçus utilisent un style de secours.', 'error');
+      }
 
       const articleDir = await getContent('content/articles');
       const articleFiles = articleDir.filter((item) => item.type === 'file' && item.name.endsWith('.json'));
@@ -706,7 +817,7 @@
     els.homeSearchPlaceholder.value = state.home.searchPlaceholder || '';
     els.homeResetLabel.value = state.home.resetLabel || '';
     setRichHTML(els.homeIntroHtml, els.homeRichEditor, state.home.introHtml || '');
-    els.homePreview.innerHTML = state.home.introHtml || '';
+    renderProductionPreview(els.homePreview, buildHomeIntroPreviewDocument());
   }
 
   function collectHomeFromForm() {
@@ -719,7 +830,7 @@
     state.home.searchPlaceholder = els.homeSearchPlaceholder.value;
     state.home.resetLabel = els.homeResetLabel.value;
     state.home.introHtml = els.homeIntroHtml.value;
-    els.homePreview.innerHTML = state.home.introHtml || '';
+    renderProductionPreview(els.homePreview, buildHomeIntroPreviewDocument());
   }
 
   function renderArticleList() {
@@ -921,13 +1032,16 @@
     const article = getSelectedArticle();
     if (!article) return;
     syncRichToTextarea(els.articleRichEditor, els.articleBody);
+    const checkedCategories = $$('#article-categories input:checked').map((input) => input.value);
     const previewArticle = {
+      slug: els.articleSlug.value || slugify(els.articleTitle.value || 'article'),
       title: els.articleTitle.value,
+      categories: checkedCategories,
       template: isCharacterFormEnabled() ? 'character' : 'general',
       characterCard: collectCharacterCardFromForm(),
       bodyHtml: els.articleBody.value
     };
-    els.articlePreview.innerHTML = `<article class="article"><header><h1>${escapeHTML(previewArticle.title)}</h1></header><div>${buildArticleBodyHtml(previewArticle)}</div></article>`;
+    renderProductionPreview(els.articlePreview, buildArticlePreviewDocument(previewArticle));
   }
 
   function renderCategoryList() {
