@@ -373,7 +373,7 @@
       'X-GitHub-Api-Version': '2022-11-28',
       ...(options.headers || {})
     };
-    const response = await fetch(apiUrl(path), { ...options, headers });
+    const response = await fetch(apiUrl(path), { ...options, headers, cache: 'no-store' });
     if (!response.ok) {
       const text = await response.text().catch(() => '');
       throw new Error(`GitHub ${response.status} ${response.statusText} — ${text.slice(0, 400)}`);
@@ -484,6 +484,22 @@
     });
   }
 
+  async function deleteGitRef(branch) {
+    return githubFetch(`/git/refs/heads/${encodeURIComponent(branch).replace(/%2F/g, '/')}`, {
+      method: 'DELETE'
+    });
+  }
+
+  async function deleteGitRefOptional(branch) {
+    try {
+      await deleteGitRef(branch);
+      return true;
+    } catch (error) {
+      if (String(error.message || '').includes('GitHub 404')) return false;
+      throw error;
+    }
+  }
+
   async function getTextFileFromRef(path, ref) {
     const fullPath = repoPath(path);
     const data = await githubFetchOptional(`/contents/${encodeURIComponent(fullPath).replace(/%2F/g, '/')}?ref=${encodeURIComponent(ref)}`);
@@ -540,7 +556,7 @@
     const newCommit = await createGitCommit(`Verrou éditorial FDDS — ${lockData.locked ? 'prise' : 'libération'} — ${lockData.editorName}`, newTree.sha, parentSha);
 
     if (createBranch) await createGitRef(lockBranch, newCommit.sha);
-    else await updateGitRef(lockBranch, newCommit.sha, false);
+    else await updateGitRef(lockBranch, newCommit.sha, true);
     state.lock.lastRemote = lockData;
     return newCommit;
   }
@@ -656,35 +672,60 @@
   }
 
   async function releaseEditorLock({ silent = false } = {}) {
-    if (!state.lock.acquired) {
-      renderLockStatus();
-      return;
-    }
+    initLockIdentity();
     state.lock.releasing = true;
     stopLockHeartbeat();
+    if (els.releaseLock) els.releaseLock.disabled = true;
+    renderLockStatus('Libération du verrou éditorial en cours...', false);
+    if (!silent) log('Libération du verrou éditorial en cours...');
+
     try {
-      const remote = await readEditorLock();
-      const remoteLock = remote?.data;
-      if (remote?.refSha && (!remoteLock || isOwnLock(remoteLock))) {
-        const releasedLock = buildLockData(remoteLock || {}, false);
-        await commitLockData(releasedLock, false);
-        await sleep(900);
-        const verification = await readEditorLock();
-        if (verification?.data && isLockActive(verification.data) && isOwnLock(verification.data)) {
-          throw new Error('GitHub indique encore un verrou actif après la demande de libération. Réessayez dans quelques secondes.');
-        }
-      } else if (remoteLock && !isOwnLock(remoteLock)) {
+      let remote = await readEditorLock();
+      let remoteLock = remote?.data;
+
+      if (!remote?.refSha) {
+        state.lock.acquired = false;
+        state.lock.lastRemote = null;
+        renderLockStatus('Aucun verrou éditorial actif.', false);
+        if (!silent) log('Aucun verrou distant à libérer.', 'ok');
+        return;
+      }
+
+      if (remoteLock && !isOwnLock(remoteLock)) {
         throw new Error(`Le verrou distant est détenu par ${lockDisplayName(remoteLock)}. Impossible de le libérer depuis cette session.`);
       }
+
+      try {
+        await deleteGitRefOptional(getLockBranchName());
+      } catch (deleteError) {
+        log(`Suppression directe du verrou impossible. Tentative de libération par écriture : ${deleteError.message}`, 'error');
+        remote = await readEditorLock();
+        remoteLock = remote?.data;
+        if (remote?.refSha && (!remoteLock || isOwnLock(remoteLock))) {
+          const releasedLock = buildLockData(remoteLock || {}, false);
+          await commitLockData(releasedLock, false);
+        } else if (remoteLock && !isOwnLock(remoteLock)) {
+          throw new Error(`Le verrou distant est détenu par ${lockDisplayName(remoteLock)}. Impossible de le libérer depuis cette session.`);
+        }
+      }
+
+      await sleep(700);
+      const verification = await readEditorLock();
+      if (verification?.data && isLockActive(verification.data) && isOwnLock(verification.data)) {
+        throw new Error('GitHub indique encore un verrou actif après la demande de libération. Réessayez dans quelques secondes.');
+      }
+
       state.lock.acquired = false;
       state.lock.lastRemote = null;
       renderLockStatus('Verrou éditorial libéré.', false);
       if (!silent) log('Verrou éditorial libéré côté GitHub.', 'ok');
     } catch (error) {
       if (!silent) log(`Impossible de libérer le verrou : ${error.message}`, 'error');
+      renderLockStatus(`Libération impossible : ${error.message}`, false);
     } finally {
       state.lock.releasing = false;
       if (!state.lock.acquired) stopLockHeartbeat();
+      if (els.releaseLock) els.releaseLock.disabled = !state.lock.acquired;
     }
   }
 
