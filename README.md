@@ -196,7 +196,7 @@ Le panneau **Afficher le HTML source de l’article** permet de contrôler le co
 
 Un article personnage est un article général auquel on ajoute une carte de personnage structurée.
 
-Pour créer ce type d’article, sélectionnez **Article personnage** dans le champ **Type d’article**, ou cochez **Créer une carte personnage**.
+Pour créer ce type d’article, sélectionnez **Article personnage** dans le champ **Type d’article**. Cette sélection ne crée pas automatiquement de carte. Pour afficher une carte dans l’article, cochez ensuite **Créer une carte personnage** et renseignez les champs nécessaires.
 
 La zone **Carte de personnage** apparaît alors. Elle permet de renseigner une carte standardisée, cohérente avec le style du site.
 

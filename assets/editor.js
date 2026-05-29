@@ -1130,41 +1130,73 @@ ${home.introHtml || ''}
 
   function hasCharacterCardData(card) {
     if (!card || typeof card !== 'object') return false;
-    return ['image', 'imageAlt', 'caption', 'type', 'activity', 'entourage', 'enemyOf', 'firstAppearance', 'status']
+    // Le texte alternatif seul ne doit pas suffire à créer une carte.
+    // Il est souvent prérempli avec le titre de l'article et provoquait des cartes fantômes.
+    return ['image', 'caption', 'type', 'activity', 'entourage', 'enemyOf', 'firstAppearance', 'status']
       .some((key) => stripHTML(String(card[key] || '')).trim());
   }
 
-  function isCharacterArticle(article) {
+  function hasDistinctCharacterCardData(card, articleImage = '') {
+    if (!card || typeof card !== 'object') return false;
+    const hasTextualData = ['caption', 'type', 'activity', 'entourage', 'enemyOf', 'firstAppearance', 'status']
+      .some((key) => stripHTML(String(card[key] || '')).trim());
+    if (hasTextualData) return true;
+    const image = String(card.image || '').trim();
+    return Boolean(image && image !== String(articleImage || '').trim());
+  }
+
+  function articleHasCharacterCard(article) {
     if (!article) return false;
+    const card = article.characterCard && typeof article.characterCard === 'object'
+      ? article.characterCard
+      : null;
+    if (card?.enabled === false) return false;
+    if (card?.enabled === true) return hasDistinctCharacterCardData(card, article.image);
+    const extracted = extractCharacterCardFromBody(article.bodyHtml || '');
+    return extracted.found || hasDistinctCharacterCardData(card, article.image);
+  }
+
+  function articleTemplateValue(article) {
+    if (!article) return 'general';
     const categories = Array.isArray(article.categories) ? article.categories : [];
     return article.template === 'character'
       || article.type === 'character'
-      || article.characterCard?.enabled
-      || hasCharacterCardData(article.characterCard)
-      || categories.includes('Personnage');
+      || categories.includes('Personnage')
+      ? 'character'
+      : 'general';
   }
 
-  function normalizeCharacterCard(card, bodyHtml = '', categories = []) {
+  function normalizeCharacterCard(card, bodyHtml = '', articleImage = '') {
     const extracted = extractCharacterCardFromBody(bodyHtml);
     const inputCard = card && typeof card === 'object' ? card : {};
     const merged = { ...defaultCharacterCard(), ...extracted.card, ...inputCard };
-    const hasPersonCategory = categories.includes('Personnage');
-    merged.enabled = Boolean(inputCard.enabled || extracted.found || hasPersonCategory || hasCharacterCardData(merged));
+
+    if (inputCard.enabled === false) {
+      merged.enabled = false;
+    } else if (inputCard.enabled === true) {
+      merged.enabled = hasDistinctCharacterCardData(merged, articleImage);
+    } else {
+      merged.enabled = Boolean(extracted.found || hasDistinctCharacterCardData(merged, articleImage));
+    }
+
+    if (!merged.enabled) {
+      return defaultCharacterCard();
+    }
     return merged;
   }
 
   function normalizeArticle(article) {
     const categories = Array.isArray(article.categories) ? article.categories : [];
     const extracted = extractCharacterCardFromBody(article.bodyHtml || '');
-    const characterCard = normalizeCharacterCard(article.characterCard, article.bodyHtml || '', categories);
-    const template = article.template || article.type || (characterCard.enabled ? 'character' : 'general');
+    const characterCard = normalizeCharacterCard(article.characterCard, article.bodyHtml || '', article.image || '');
+    const template = article.template || article.type || (categories.includes('Personnage') ? 'character' : 'general');
     return {
       slug: article.slug || slugify(article.title),
       title: article.title || 'Nouvel article',
       summary: article.summary || '',
-      image: article.image || characterCard.image || '',
+      image: article.image || (characterCard.enabled ? characterCard.image : '') || '',
       categories,
-      template: template === 'character' || characterCard.enabled ? 'character' : 'general',
+      template: template === 'character' ? 'character' : 'general',
       characterCard,
       bodyHtml: extracted.found ? extracted.bodyHtml : (article.bodyHtml || '')
     };
@@ -1240,7 +1272,9 @@ ${home.introHtml || ''}
       const input = label.querySelector('input');
       input.addEventListener('change', () => {
         const selectedCategories = collectArticleCategories();
-        if (selectedCategories.includes('Personnage')) syncCharacterControls(true);
+        if (selectedCategories.includes('Personnage') && els.articleTemplate?.value !== 'character') {
+          els.articleTemplate.value = 'character';
+        }
         renderArticlePreview();
       });
       els.articleCategories.appendChild(label);
@@ -1296,19 +1330,25 @@ ${home.introHtml || ''}
   }
 
   function isCharacterFormEnabled() {
-    return els.articleTemplate?.value === 'character' || Boolean(els.characterCardToggle?.checked);
+    return Boolean(els.characterCardToggle?.checked);
   }
 
-  function syncCharacterControls(enabled) {
-    if (els.articleTemplate) els.articleTemplate.value = enabled ? 'character' : 'general';
+  function setCharacterCardControls(enabled) {
     if (els.characterCardToggle) els.characterCardToggle.checked = Boolean(enabled);
     setCharacterPanelVisible(enabled);
   }
 
+  function syncCharacterControls(enabled) {
+    // Compatibilité avec les anciens appels : cette fonction pilote désormais uniquement
+    // la carte personnage. Le type d'article reste indépendant.
+    setCharacterCardControls(enabled);
+  }
+
   function renderCharacterCardFields(article) {
-    const isCharacter = isCharacterArticle(article);
-    syncCharacterControls(isCharacter);
-    const card = { ...defaultCharacterCard(), ...(article?.characterCard || {}) };
+    const hasCard = articleHasCharacterCard(article);
+    if (els.articleTemplate) els.articleTemplate.value = articleTemplateValue(article);
+    setCharacterCardControls(hasCard);
+    const card = { ...defaultCharacterCard(), ...(hasCard ? (article?.characterCard || {}) : {}) };
     if (els.characterImage) els.characterImage.value = card.image || article?.image || '';
     if (els.characterImageSelect) els.characterImageSelect.value = card.image || article?.image || '';
     if (els.characterImageAlt) els.characterImageAlt.value = card.imageAlt || article?.title || '';
@@ -1323,9 +1363,10 @@ ${home.introHtml || ''}
 
   function collectCharacterCardFromForm() {
     const enabled = isCharacterFormEnabled();
-    return {
+    if (!enabled) return defaultCharacterCard();
+    const card = {
       ...defaultCharacterCard(),
-      enabled,
+      enabled: true,
       image: els.characterImage?.value?.trim() || '',
       imageAlt: els.characterImageAlt?.value?.trim() || '',
       caption: els.characterCaption?.value?.trim() || '',
@@ -1336,6 +1377,8 @@ ${home.introHtml || ''}
       firstAppearance: getMiniHTML(els.characterFirstAppearance),
       status: getMiniHTML(els.characterStatus)
     };
+    if (!hasCharacterCardData(card)) return defaultCharacterCard();
+    return card;
   }
 
   function saveArticleFromForm(withLog = true) {
@@ -1350,9 +1393,9 @@ ${home.introHtml || ''}
     article.image = els.articleImage.value.trim();
     article.summary = els.articleSummary.value.trim();
     article.categories = collectArticleCategories();
-    article.template = isCharacterFormEnabled() ? 'character' : 'general';
+    article.template = els.articleTemplate?.value === 'character' ? 'character' : 'general';
     article.characterCard = collectCharacterCardFromForm();
-    if (isCharacterFormEnabled() && article.characterCard.image && !article.image) {
+    if (article.characterCard.enabled && article.characterCard.image && !article.image) {
       article.image = article.characterCard.image;
       els.articleImage.value = article.image;
     }
@@ -1410,7 +1453,7 @@ ${home.introHtml || ''}
       slug: els.articleSlug.value || slugify(els.articleTitle.value || 'article'),
       title: els.articleTitle.value,
       categories: checkedCategories,
-      template: isCharacterFormEnabled() ? 'character' : 'general',
+      template: els.articleTemplate?.value === 'character' ? 'character' : 'general',
       characterCard: collectCharacterCardFromForm(),
       bodyHtml: els.articleBody.value
     };
@@ -1593,7 +1636,7 @@ ${home.introHtml || ''}
 
   function buildCharacterCardHtml(article) {
     const card = { ...defaultCharacterCard(), ...(article.characterCard || {}) };
-    if (!card.enabled) return '';
+    if (!card.enabled || !hasCharacterCardData(card)) return '';
     const imagePath = card.image || article.image || '';
     const imageAlt = card.imageAlt || article.title || '';
     const imageHtml = imagePath ? `<figure class="infobox-image">
@@ -2117,7 +2160,7 @@ ${article.bodyHtml || ''}`.trim();
     { selector: '#article-image', title: 'Image principale', text: 'Chemin de l’image utilisée pour la carte de l’article sur la page d’accueil, par exemple assets/images/vega.webp.' },
     { selector: '#article-image-select', title: 'Choisir une image existante', text: 'Permet de sélectionner une image déjà connue du dépôt sans recopier son chemin manuellement.' },
     { selector: '#article-summary', title: 'Résumé de carte', text: 'Texte court affiché sur la carte de l’article. Il doit donner envie d’ouvrir l’article sans remplacer son contenu.' },
-    { selector: '#article-template', title: 'Type d’article', text: 'Article général correspond à une page classique. Article personnage active la logique de carte personnage structurée.' },
+    { selector: '#article-template', title: 'Type d’article', text: 'Article général correspond à une page classique. Article personnage indique seulement le type éditorial de l’article. La carte se pilote séparément avec la case « Créer une carte personnage ».' },
     { selector: '#character-card-toggle', title: 'Carte personnage', text: 'Active ou désactive la carte personnage. Quand elle est active, les champs dédiés sont utilisés pour générer automatiquement la carte dans l’article.' },
     { selector: '#character-card-panel', title: 'Champs de carte personnage', text: 'Ces champs alimentent la carte personnage affichée dans l’article public. Les champs riches acceptent aussi des liens internes ou externes.', mode: 'self' },
     { selector: '#character-image', title: 'Image de la carte', text: 'Image affichée dans la carte personnage. Elle peut être différente de l’image principale utilisée pour la carte d’article.' },
@@ -2350,12 +2393,14 @@ ${article.bodyHtml || ''}`.trim();
       .filter(Boolean)
       .forEach((input) => input.addEventListener('input', () => renderArticlePreview()));
     els.articleTemplate?.addEventListener('change', () => {
-      const enabled = els.articleTemplate.value === 'character';
-      syncCharacterControls(enabled);
       renderArticlePreview();
     });
     els.characterCardToggle?.addEventListener('change', () => {
-      syncCharacterControls(els.characterCardToggle.checked);
+      const enabled = Boolean(els.characterCardToggle.checked);
+      if (enabled && els.articleTemplate?.value !== 'character') {
+        els.articleTemplate.value = 'character';
+      }
+      setCharacterCardControls(enabled);
       renderArticlePreview();
     });
     els.characterImageSelect?.addEventListener('change', () => {
