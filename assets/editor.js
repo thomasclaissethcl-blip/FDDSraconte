@@ -2215,27 +2215,22 @@ ${article.bodyHtml || ''}`.trim();
     }
 
     if (isCharacterFieldLabel) {
-      const control = host.querySelector('input, select, textarea, .rich-mini, .rich-editor');
-      if (control) {
-        const labelRow = document.createElement('span');
-        labelRow.className = 'context-help-label-row';
+      // Ne jamais insérer le bouton d'aide DANS le label de la carte personnage.
+      // Un bouton placé dans un <label> devient une cible implicite du label :
+      // les clics dans les champs riches peuvent alors ouvrir l'aide au lieu de placer le curseur.
+      // On enveloppe donc le label et le bouton dans un conteneur neutre, puis on place le bouton à côté.
+      let wrapper = host.parentElement?.classList?.contains('character-help-wrapper')
+        ? host.parentElement
+        : null;
 
-        const labelText = document.createElement('span');
-        labelText.className = 'context-help-label-text';
-
-        while (host.firstChild && host.firstChild !== control) {
-          labelText.appendChild(host.firstChild);
-        }
-
-        const normalizedText = labelText.textContent.replace(/\s+/g, ' ').trim();
-        labelText.textContent = normalizedText;
-
-        labelRow.appendChild(labelText);
-        labelRow.appendChild(button);
-        host.insertBefore(labelRow, control);
-      } else {
-        host.appendChild(button);
+      if (!wrapper) {
+        wrapper = document.createElement('div');
+        wrapper.className = 'character-help-wrapper';
+        host.parentNode.insertBefore(wrapper, host);
+        wrapper.appendChild(host);
       }
+
+      wrapper.appendChild(button);
       return;
     }
 
