@@ -409,49 +409,27 @@ fieldset.has-context-help,
   flex: 0 0 auto;
 }
 
-/* Carte personnage : les aides contextuelles sont sorties des <label>.
-   Cela évite que le label transforme le clic dans un champ éditable en clic sur le bouton d'aide. */
-.character-help-wrapper {
-  position: relative;
-  display: grid;
-  gap: .35rem;
-  min-width: 0;
-}
-
-.character-help-wrapper > label.has-context-help {
+/* Dans la carte personnage, les boutons d'aide restent hors des champs éditables.
+   Ils ne peuvent donc plus intercepter le clic ou le survol destinés à un champ. */
+#character-card-panel label.has-context-help {
   padding-right: 0;
 }
 
-.character-help-wrapper > label.has-context-help .context-help-trigger-field {
-  display: none;
+#character-card-panel label.has-context-help .context-help-trigger-field {
+  position: static;
+  z-index: auto;
+  justify-self: end;
+  margin: -1.65rem 0 .05rem;
+  flex: 0 0 auto;
 }
 
-.character-help-wrapper > .context-help-trigger-field {
-  position: absolute;
-  top: 0;
-  right: 0;
-  z-index: 3;
-}
-
-.character-help-wrapper > label {
-  min-width: 0;
-}
-
-.character-help-wrapper > label > input,
-.character-help-wrapper > label > select,
-.character-help-wrapper > label > textarea,
-.character-help-wrapper > label > .rich-mini,
-.character-help-wrapper > label > .rich-editor {
+#character-card-panel label.has-context-help input,
+#character-card-panel label.has-context-help select,
+#character-card-panel label.has-context-help textarea,
+#character-card-panel label.has-context-help .rich-mini,
+#character-card-panel label.has-context-help .rich-editor {
   position: relative;
   z-index: 1;
-}
-
-.character-help-wrapper > label:has(input),
-.character-help-wrapper > label:has(select),
-.character-help-wrapper > label:has(textarea),
-.character-help-wrapper > label:has(.rich-mini),
-.character-help-wrapper > label:has(.rich-editor) {
-  padding-right: 0;
 }
 
 .actions-row .context-help-trigger-inline,
@@ -814,4 +792,55 @@ fieldset.has-context-help,
   .busy-dialog {
     width: calc(100vw - 1rem);
   }
+}
+
+/* Correction structurelle des aides dans la carte personnage.
+   Les champs de carte ne sont plus des <label> englobants : l'aide est dans la ligne de libellé,
+   et ne peut plus recouvrir la zone de saisie. */
+#character-card-panel .field-block {
+  display: grid;
+  gap: .35rem;
+  font-weight: 700;
+  color: var(--text);
+  position: static;
+  padding-right: 0;
+}
+
+#character-card-panel .field-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .65rem;
+  min-height: 1.75rem;
+}
+
+#character-card-panel .field-label > span {
+  min-width: 0;
+}
+
+#character-card-panel .field-block input,
+#character-card-panel .field-block select,
+#character-card-panel .field-block textarea,
+#character-card-panel .field-block .rich-mini,
+#character-card-panel .field-block .rich-editor {
+  font-weight: 400;
+  position: relative;
+  z-index: 1;
+}
+
+#character-card-panel .field-block.has-context-help {
+  position: static;
+  padding-right: 0;
+}
+
+#character-card-panel .field-block .context-help-trigger-field {
+  position: static;
+  z-index: auto;
+  margin: 0;
+  flex: 0 0 auto;
+  pointer-events: auto;
+}
+
+#character-card-panel .field-block .rich-mini {
+  pointer-events: auto;
 }

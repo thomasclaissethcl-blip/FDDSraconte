@@ -2183,6 +2183,10 @@ ${article.bodyHtml || ''}`.trim();
     if (!element) return null;
     if (mode === 'self') return element;
     if (element.matches('button, .button-like')) return element;
+
+    const characterField = element.closest('#character-card-panel .field-block');
+    if (characterField) return characterField;
+
     return element.closest('label') || element.closest('fieldset') || element;
   }
 
@@ -2194,12 +2198,10 @@ ${article.bodyHtml || ''}`.trim();
     button.type = 'button';
 
     const isButtonHost = host.matches('button, .button-like');
-    const isCharacterFieldLabel = host.matches('label') && Boolean(host.closest('#character-card-panel'));
-    button.className = isButtonHost
-      ? 'context-help-trigger context-help-trigger-inline'
-      : isCharacterFieldLabel
-        ? 'context-help-trigger context-help-trigger-field'
-        : 'context-help-trigger';
+    const isFieldBlockHost = host.classList.contains('field-block');
+    button.className = isButtonHost || isFieldBlockHost
+      ? 'context-help-trigger context-help-trigger-inline context-help-trigger-field'
+      : 'context-help-trigger';
 
     button.setAttribute('aria-label', `Aide : ${item.title}`);
     button.textContent = '?';
@@ -2214,23 +2216,13 @@ ${article.bodyHtml || ''}`.trim();
       return;
     }
 
-    if (isCharacterFieldLabel) {
-      // Ne jamais insérer le bouton d'aide DANS le label de la carte personnage.
-      // Un bouton placé dans un <label> devient une cible implicite du label :
-      // les clics dans les champs riches peuvent alors ouvrir l'aide au lieu de placer le curseur.
-      // On enveloppe donc le label et le bouton dans un conteneur neutre, puis on place le bouton à côté.
-      let wrapper = host.parentElement?.classList?.contains('character-help-wrapper')
-        ? host.parentElement
-        : null;
-
-      if (!wrapper) {
-        wrapper = document.createElement('div');
-        wrapper.className = 'character-help-wrapper';
-        host.parentNode.insertBefore(wrapper, host);
-        wrapper.appendChild(host);
+    if (isFieldBlockHost) {
+      const labelRow = host.querySelector('.field-label');
+      if (labelRow) {
+        labelRow.appendChild(button);
+      } else {
+        host.insertAdjacentElement('afterbegin', button);
       }
-
-      wrapper.appendChild(button);
       return;
     }
 

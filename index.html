@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="icon" type="image/png" href="assets/favicon.png">
-  <title>FDDS Raconte v1.8</title>
+  <title>FDDS Raconte v1.7</title>
   <link rel="stylesheet" href="assets/editor.css" />
   <script defer src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <script defer src="assets/editor.js"></script>
@@ -182,43 +182,53 @@
                 </div>
                 <p class="help-text">Ces champs alimentent la carte flottante de l’article lorsque l’option est activée.</p>
               </div>
-              <div class="form-grid two">
-                <label>Image de la carte
+              <div class="form-grid two character-card-basic-fields">
+                <div class="field-block character-card-field">
+                  <div class="field-label"><span>Image de la carte</span></div>
                   <input id="character-image" placeholder="assets/images/..." />
-                </label>
-                <label>Choisir une image existante
+                </div>
+                <div class="field-block character-card-field">
+                  <div class="field-label"><span>Choisir une image existante</span></div>
                   <select id="character-image-select"></select>
-                </label>
-                <label>Texte alternatif de l’image
+                </div>
+                <div class="field-block character-card-field">
+                  <div class="field-label"><span>Texte alternatif de l’image</span></div>
                   <input id="character-image-alt" />
-                </label>
-                <label>Légende de l’image
+                </div>
+                <div class="field-block character-card-field">
+                  <div class="field-label"><span>Légende de l’image</span></div>
                   <input id="character-caption" />
-                </label>
+                </div>
               </div>
               <div class="mini-toolbar" aria-label="Outils pour les champs de carte personnage">
                 <button type="button" class="secondary" id="character-field-link">Créer un lien sur la sélection</button>
                 <button type="button" class="secondary" id="character-field-unlink">Retirer le lien</button>
               </div>
               <div class="character-field-grid">
-                <label>Type
+                <div class="field-block character-card-field">
+                  <div class="field-label"><span>Type</span></div>
                   <div id="character-type" class="rich-mini" contenteditable="true" role="textbox" aria-multiline="true"></div>
-                </label>
-                <label>Activité
+                </div>
+                <div class="field-block character-card-field">
+                  <div class="field-label"><span>Activité</span></div>
                   <div id="character-activity" class="rich-mini" contenteditable="true" role="textbox" aria-multiline="true"></div>
-                </label>
-                <label>Entourage
+                </div>
+                <div class="field-block character-card-field">
+                  <div class="field-label"><span>Entourage</span></div>
                   <div id="character-entourage" class="rich-mini" contenteditable="true" role="textbox" aria-multiline="true"></div>
-                </label>
-                <label>Ennemi de
+                </div>
+                <div class="field-block character-card-field">
+                  <div class="field-label"><span>Ennemi de</span></div>
                   <div id="character-enemy-of" class="rich-mini" contenteditable="true" role="textbox" aria-multiline="true"></div>
-                </label>
-                <label>Première apparition
+                </div>
+                <div class="field-block character-card-field">
+                  <div class="field-label"><span>Première apparition</span></div>
                   <div id="character-first-appearance" class="rich-mini" contenteditable="true" role="textbox" aria-multiline="true"></div>
-                </label>
-                <label>État
+                </div>
+                <div class="field-block character-card-field">
+                  <div class="field-label"><span>État</span></div>
                   <div id="character-status" class="rich-mini" contenteditable="true" role="textbox" aria-multiline="true"></div>
-                </label>
+                </div>
               </div>
             </section>
             <fieldset class="checkbox-group">
